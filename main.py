@@ -9,31 +9,29 @@ clock = pygame.time.Clock()
 # Инициализируем игру
 pygame.init()
 # Размеры для экрана игры (передается кортеж)
-screen = pygame.display.set_mode((900, 360), )
+screen = pygame.display.set_mode((1200, 480), )
 # Добавялем название для приложения
-pygame.display.set_caption("Slowpoke")
+pygame.display.set_caption("Slowking")
 # Подгружаем изображение и устанавливаем его как иконку для проекта https://www.iconfinder.com/
 icon = pygame.image.load('images/icon.png').convert_alpha()
 pygame.display.set_icon(icon)
 
-# Создаем текстовую запись https://fonts.google.com/
-# myfont = pygame.font.Font('fonts/PTSans-Regular.ttf', 40)
-# text_surface = myfont.render('Beetle game', True, 'Red')
-
-bg = pygame.image.load('images/bg.jpg').convert()
+bg = pygame.image.load('images/background/bg_1.png').convert_alpha()
 
 # Создание движения игрока влево
 walk_left = [
     pygame.image.load('images/player_left/player_left_1.png').convert_alpha(),
     pygame.image.load('images/player_left/player_left_2.png').convert_alpha(),
-    pygame.image.load('images/player_left/player_left_3.png').convert_alpha()
+    pygame.image.load('images/player_left/player_left_3.png').convert_alpha(),
+    pygame.image.load('images/player_left/player_left_4.png').convert_alpha()
 ]
 
 # Создание движения игрока вправо
 walk_right = [
     pygame.image.load('images/player_right/player_right_1.png').convert_alpha(),
     pygame.image.load('images/player_right/player_right_2.png').convert_alpha(),
-    pygame.image.load('images/player_right/player_right_3.png').convert_alpha()
+    pygame.image.load('images/player_right/player_right_3.png').convert_alpha(),
+    pygame.image.load('images/player_right/player_right_4.png').convert_alpha()
 ]
 
 monster = pygame.image.load('images/monster.png').convert_alpha()
@@ -43,10 +41,10 @@ player_anim_count = 0
 bg_x = 0
 
 # Скорость для передвижения игрока
-player_speed = 45
+player_speed = 35
 # Координата размещения игрока
 player_x = 150
-player_y = 187
+player_y = 250
 
 is_jump = False
 jump_count = 7
@@ -59,26 +57,31 @@ monster_timer = pygame.USEREVENT + 1
 pygame.time.set_timer(monster_timer, 5000)
 
 label = pygame.font.Font('fonts/PTSans-Regular.ttf', 40)
+# текст, не скруглять, цвет
 lose_label = label.render("Вы проиграли!", False, (193, 196, 199))
 restart_label = label.render("Играть заново", False, (115, 132, 148))
+# невидимая рамка
 restart_label_rect = restart_label.get_rect(topleft=(180, 200))
+start_label = label.render("Играть!", False, (115, 132, 148))
+start_label_rect = start_label.get_rect(topleft=(180, 200))
+
 
 # Выстрелы
-bullets_left = 5
-bullet = pygame.image.load('images/bullet.png').convert_alpha()
-bullets = []
+shots_left = 5 # осталось выстрелов
+shot = pygame.image.load('images/bullet.png').convert_alpha()
+shots = []
 
+# gameplay для того чтобы проверять, запущена ли игра. Если нет - проигрыш
 gameplay = True
 
-running = True
 # Добавляем цикл, чтобы программа сразу же не закрывалась
+running = True
 while running:
-
-    # Вставка фона
-    screen.blit(bg, (bg_x, 0))
-    screen.blit(bg, (bg_x + 900, 0))
-
     if gameplay:
+        # Вставка фона
+        screen.blit(bg, (bg_x, 0))
+        screen.blit(bg, (bg_x + 1200, 0))
+
         # Квадрат вокруг нашего игрока для соприкосновения
         player_rect = walk_left[0].get_rect(topleft=(player_x, player_y))
         # monster_rect = monster.get_rect(topleft=(monster_x, 250))
@@ -134,27 +137,25 @@ while running:
 
         # Движение фона
         bg_x -= 2
-        if bg_x == -900:
+        if bg_x == -1200:
             bg_x = 0
 
-
-
         # Движение после выстрела
-        if bullets:
-            for (i, el) in enumerate(bullets):
-                screen.blit(bullet, (el.x, el.y))
+        if shots:
+            for (i, el) in enumerate(shots):
+                screen.blit(shot, (el.x, el.y))
                 el.x += 4
 
                 # Удаление после выхода за пределы игрового экрана
                 if el.x > 950:
-                    bullets.pop()
+                    shots.pop()
 
                 if monster_list_in_game:
                     for (index, monst) in enumerate(monster_list_in_game):
                         # При взаимодействии патрона и монстра они удалятся
                         if el.colliderect(monst):
                             monster_list_in_game.pop(index)
-                            bullets.pop(i)
+                            shots.pop(i)
 
     else:
         screen.fill((87, 88, 89))
@@ -167,8 +168,8 @@ while running:
             gameplay = True
             player_x = 150
             monster_list_in_game.clear()
-            bullets.clear()
-            bullets_left = 5
+            shots.clear()
+            shots_left = 5
 
     pygame.display.update()  #Постоянно обновляем экран нашего приложения
 
@@ -181,9 +182,9 @@ while running:
         if event.type == monster_timer:
             monster_list_in_game.append(monster.get_rect(topleft=(950, 100)))
         # Выстрел по нажатию. Благодаря KEYUP срабатывание будет происходить после поднятия с клавиши
-        if gameplay and event.type == pygame.KEYUP and event.key == pygame.K_SPACE and bullets_left > 0:
-            bullets.append(bullet.get_rect(topleft=(player_x + 30, player_y + 10)))
-            bullets_left -= 1
+        if gameplay and event.type == pygame.KEYUP and event.key == pygame.K_SPACE and shots_left > 0:
+            shots.append(shot.get_rect(topleft=(player_x + 30, player_y + 10)))
+            shots_left -= 1
 
-    clock.tick(10)
-
+    clock.tick(15)
+#

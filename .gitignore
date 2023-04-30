@@ -4,6 +4,7 @@
 /build/
 /src_py/version.py
 .mg
+.buildozer
 
 # Windows prebuilt external libraries
 /prebuilt-x??
