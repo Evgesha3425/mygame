@@ -1,190 +1,389 @@
-# Документация https://www.pygame.org/docs/
-# Шрифты https://fonts.google.com/
-# Иконки https://www.iconfinder.com/
-
 import pygame
+import random
+import pygame_menu
+from database import get_best, add_record
 
-# Добавляем часы, чтобы обновлять экран не так часто
-clock = pygame.time.Clock()
-# Инициализируем игру
 pygame.init()
-# Размеры для экрана игры (передается кортеж)
-screen = pygame.display.set_mode((1200, 480), )
-# Добавялем название для приложения
-pygame.display.set_caption("Slowking")
-# Подгружаем изображение и устанавливаем его как иконку для проекта https://www.iconfinder.com/
-icon = pygame.image.load('images/icon.png').convert_alpha()
-pygame.display.set_icon(icon)
 
-bg = pygame.image.load('images/background/bg_1.png').convert_alpha()
+# Ширина и высота экрана
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
 
-# Создание движения игрока влево
-walk_left = [
-    pygame.image.load('images/player_left/player_left_1.png').convert_alpha(),
-    pygame.image.load('images/player_left/player_left_2.png').convert_alpha(),
-    pygame.image.load('images/player_left/player_left_3.png').convert_alpha(),
-    pygame.image.load('images/player_left/player_left_4.png').convert_alpha()
-]
+USERNAME = None
 
-# Создание движения игрока вправо
-walk_right = [
-    pygame.image.load('images/player_right/player_right_1.png').convert_alpha(),
-    pygame.image.load('images/player_right/player_right_2.png').convert_alpha(),
-    pygame.image.load('images/player_right/player_right_3.png').convert_alpha(),
-    pygame.image.load('images/player_right/player_right_4.png').convert_alpha()
-]
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
-monster = pygame.image.load('images/monster.png').convert_alpha()
-monster_list_in_game = []
-
-player_anim_count = 0
-bg_x = 0
-
-# Скорость для передвижения игрока
-player_speed = 35
-# Координата размещения игрока
-player_x = 150
-player_y = 250
-
-is_jump = False
-jump_count = 7
-
-# bg_sound = pygame.mixer.Sound('sounds/bg.mp3')
-# bg_sound.play()
-
-# Подключаем таймер для появления монстров с задержкой
-monster_timer = pygame.USEREVENT + 1
-pygame.time.set_timer(monster_timer, 5000)
-
-label = pygame.font.Font('fonts/PTSans-Regular.ttf', 40)
-# текст, не скруглять, цвет
-lose_label = label.render("Вы проиграли!", False, (193, 196, 199))
-restart_label = label.render("Играть заново", False, (115, 132, 148))
-# невидимая рамка
-restart_label_rect = restart_label.get_rect(topleft=(180, 200))
-start_label = label.render("Играть!", False, (115, 132, 148))
-start_label_rect = start_label.get_rect(topleft=(180, 200))
+pygame.display.set_caption('Slowking')
+clock = pygame.time.Clock()  # подключаем часы
+FPS = 60  # счетчик кадров в секунду
 
 
-# Выстрелы
-shots_left = 5 # осталось выстрелов
-shot = pygame.image.load('images/bullet.png').convert_alpha()
-shots = []
+# шрифты
+font_large = pygame.font.Font('fonts/Ubuntu-Light.ttf', 48)
+font_small = pygame.font.Font('fonts/Ubuntu-Light.ttf', 24)
 
-# gameplay для того чтобы проверять, запущена ли игра. Если нет - проигрыш
-gameplay = True
+lose_label = font_large.render("Вы проиграли!", True, ('black'))
+restart = font_small.render("Играть заново :)", True, ('black'))
+restart_rect = restart.get_rect(topleft=(320, 300))
+records = font_small.render("Таблица рекордов", True, ('black'))
+records_rect = records.get_rect(topleft=(305, 350))
+# top_five = font_large.render("Топ-5 игроков:", True, ('black'))
+save = font_small.render("Сохранить результат", True, ('black'))
+save_rect = records.get_rect(topleft=(290, 250))
 
-# Добавляем цикл, чтобы программа сразу же не закрывалась
-running = True
-while running:
-    if gameplay:
-        # Вставка фона
-        screen.blit(bg, (bg_x, 0))
-        screen.blit(bg, (bg_x + 1200, 0))
+# загружаем картинки
+bg_image = pygame.image.load('images/background/bg_mini.png')
 
-        # Квадрат вокруг нашего игрока для соприкосновения
-        player_rect = walk_left[0].get_rect(topleft=(player_x, player_y))
-        # monster_rect = monster.get_rect(topleft=(monster_x, 250))
+ground_image = pygame.image.load('images/background/ground_mini.png')
+ground_image = pygame.transform.scale(ground_image, (804, 60))
+GROUND_H = ground_image.get_height()
 
-        # Автоматическая вставка монстров за счет выведения их из списка
-        if monster_list_in_game:
-            # Перебирая список через enumerate мы не только перебираем список, но и получаем его индекс
-            for (i, el) in enumerate(monster_list_in_game):
-                screen.blit(monster, el)
-                el.x -= 10
+enemy_image = pygame.image.load('images/monst.png')
+enemy_image = pygame.transform.scale(enemy_image, (80, 80))
 
-                # Удаление монстра вне поле игры
-                if el.x < -10:
-                    monster_list_in_game.pop(i)
+enemy_dead_image = pygame.image.load('images/monst.png')
+enemy_dead_image = pygame.transform.scale(enemy_dead_image, (80, 80))
 
-                # Условие соприкосновения
-                if player_rect.colliderect(el):
-                    print("You lose")
-                    gameplay = False
+player_image = pygame.image.load('images/player_mini_2.png')
+player_image = pygame.transform.scale(player_image, (100, 80))
 
-        # Движение персонажа
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]:
-            screen.blit(walk_left[player_anim_count], (player_x, player_y))
-        else:
-            screen.blit(walk_right[player_anim_count], (player_x, player_y))
 
-        if player_anim_count == 2:
-            player_anim_count = 0
-        else:
-            player_anim_count += 1
+# Основная функция игры
+def start_the_game():
+    SCORE = 0
+    INIT_DELAY = 2000  # начальная задержка создания монстров
+    spawn_delay = INIT_DELAY  # частота создания монстров
+    DECREASE_BASE = 1.01  # коэффициент увеличения сложности
+    last_spawn_time = pygame.time.get_ticks()  # хранение последнего времени создания монстра
 
-        # Отслеживание нажатия клавиш
-        if keys[pygame.K_LEFT] and player_x > 100:
-            player_x -= player_speed
-        elif keys[pygame.K_RIGHT] and player_x < 750:
-            player_x += player_speed
+    # класс существ
+    class Entity:
+        def __init__(self, image):
+            self.image = image  # изображение существа
+            self.rect = self.image.get_rect()  # прямоугольник вокруг существа
+            self.change_y = 0  # скорость по х
+            self.change_x = 0  # скорость по х
+            self.speed = 5  # скорость для перемещения
+            self.is_out = False  # в пределах карты игрок или нет
+            self.is_dead = False  # жив игрок или нет
+            self.jump_speed = -12  # скорость прыжка
+            self.gravity = 0.5  # гравитация
+            self.is_grounded = False  # находимся ли на земле
 
-        # Отслеживание прыжка
-        if not is_jump:
-            if keys[pygame.K_UP]:
-                is_jump = True
-        else:
-            if jump_count >= -7:
-                if jump_count > 0:
-                    player_y -= (jump_count ** 2)
-                else:
-                    player_y += (jump_count ** 2)
-                jump_count -= 1
+        # отслеживание управления
+        def control(self):
+            pass
+
+        # уничтожение сущности
+        def kill(self, dead_image):
+            # картинка сущности
+            self.image = dead_image
+            # мертва ли сущность
+            self.is_dead = True
+            # инвертируем скорость при смерти
+            self.change_x = -self.change_x
+            # после смерти подкидывается сущность
+            self.change_y = self.jump_speed
+
+        # для обновления отрисовки движения
+        def update(self):
+            # перемещение за счет изменения скорости
+            self.rect.x += self.change_x
+            # изменяем скорость прибавляя гравитацию
+            self.rect.y += self.change_y
+            # передвижение за счет изменения скорости вместе с гравитацией
+            self.change_y += self.gravity
+
+            # если игрок уже мертв
+            if self.is_dead:
+                if self.rect.top > SCREEN_HEIGHT - GROUND_H:
+                    self.is_out = True
+            # если живы, то ходим по земле
             else:
-                is_jump = False
-                jump_count = 7
+                self.control()
+                # проверяем не выпали ли за пределы игры
+                if self.rect.bottom > SCREEN_HEIGHT - GROUND_H:
+                    self.is_grounded = True
+                    self.change_y = 0
+                    self.rect.bottom = SCREEN_HEIGHT - GROUND_H
 
-        # Движение фона
-        bg_x -= 2
-        if bg_x == -1200:
-            bg_x = 0
+        # для отрисовки сущности
+        def draw(self, surface):
+            surface.blit(self.image, self.rect)
 
-        # Движение после выстрела
-        if shots:
-            for (i, el) in enumerate(shots):
-                screen.blit(shot, (el.x, el.y))
-                el.x += 4
+    # наследуемый класс для инициализации Хонтеров
+    class Haunter(Entity):
+        # конструктор класса
+        def __init__(self):
+            super().__init__(enemy_image)
+            self.create_haunter()
 
-                # Удаление после выхода за пределы игрового экрана
-                if el.x > 950:
-                    shots.pop()
+        # создание хонтеров
+        def create_haunter(self):
+            # выбор направления, откуда появляются монстры
+            direction = random.randint(0, 3)
 
-                if monster_list_in_game:
-                    for (index, monst) in enumerate(monster_list_in_game):
-                        # При взаимодействии патрона и монстра они удалятся
-                        if el.colliderect(monst):
-                            monster_list_in_game.pop(index)
-                            shots.pop(i)
+            if direction == 0:
+                self.change_x = self.speed
+                self.rect.bottomright = (0, 0)
+            elif direction == 1:
+                self.change_x = -self.speed
+                self.rect.bottomleft = (SCREEN_WIDTH, 0)
+            elif direction == 2:
+                self.change_x = self.speed
+                self.rect.bottomright = (0, 400)
+            elif direction == 3:
+                self.change_x = -self.speed
+                self.rect.bottomleft = (SCREEN_WIDTH, 400)
 
-    else:
-        screen.fill((87, 88, 89))
-        screen.blit(lose_label, (180, 100))
-        screen.blit(restart_label, restart_label_rect)
+        def update(self):
+            super().update()
+            # если Хонтер покидает пределы влево или вправо
+            if self.change_x > 0 and self.rect.left > SCREEN_WIDTH or self.change_x < 0 and self.rect.right < 0:
+                self.is_out = True
 
-        mouse = pygame.mouse.get_pos()
-        # Проверка соприкосновения квадрата restart с мышкой
-        if restart_label_rect.collidepoint(mouse) and pygame.mouse.get_pressed()[0]:
-            gameplay = True
-            player_x = 150
-            monster_list_in_game.clear()
-            shots.clear()
-            shots_left = 5
+    # класс для инициализации слоупока
+    class Player(Entity):
+        def __init__(self):
+            super().__init__(player_image)
+            self.respawn()
 
-    pygame.display.update()  #Постоянно обновляем экран нашего приложения
+        # переопределим управление для игрока
+        def control(self):
+            # обнуляем скорость по х
+            self.change_x = 0
 
-    for event in pygame.event.get():  #pygame.event.get() - список со всеми возможными событиями
-        # Добавляем условие корректного закрытия игры
-        if event.type == pygame.QUIT:
-            running = False
-            pygame.quit()
-        # При срабатывании таймера добавляется новый монстр в список
-        if event.type == monster_timer:
-            monster_list_in_game.append(monster.get_rect(topleft=(950, 100)))
-        # Выстрел по нажатию. Благодаря KEYUP срабатывание будет происходить после поднятия с клавиши
-        if gameplay and event.type == pygame.KEYUP and event.key == pygame.K_SPACE and shots_left > 0:
-            shots.append(shot.get_rect(topleft=(player_x + 30, player_y + 10)))
-            shots_left -= 1
+            # проверка нажатия на клавиши
+            keys = pygame.key.get_pressed()
+            # двигаем игрока влево
+            if keys[pygame.K_a]:
+                self.change_x = -self.speed
+            # двигаем игрока вправо
+            elif keys[pygame.K_d]:
+                self.change_x = self.speed
 
-    clock.tick(15)
+            # проверка нахождения на земле для прыжка
+            if self.is_grounded and keys[pygame.K_SPACE]:
+                self.is_grounded = False
+                self.jump()
+
+        # начальное положение в центральной точке
+        def respawn(self):
+            self.is_out = False
+            self.is_dead = False
+            self.rect.midbottom = (SCREEN_WIDTH // 2, SCREEN_HEIGHT)
+
+        def jump(self):
+            self.change_y = self.jump_speed
+
+    player = Player()  # создаем игрока
+
+    haunters = []  # список Хонтеров, находящихся на экране
+
+    # основной цикл
+    running = True
+    while running:
+        paused = False
+        # фон
+        screen.blit(bg_image, (0, 0))
+        screen.blit(ground_image, (0, SCREEN_HEIGHT - GROUND_H))
+
+        # все события которые происходят
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+                quit()
+
+            # # проверка на нажатие других клавиш
+            # elif event.type == pygame.KEYDOWN:
+            #     if player.is_out:
+            #         SCORE = 0
+            #         last_spawn_time = pygame.time.get_ticks()
+            #         player.respawn()
+            #         haunters.clear()
+
+        score_surface = font_large.render(str(SCORE), True, 'blue')  # поверхность счетчика
+        score_rect = score_surface.get_rect()
+
+        # при проигрыше
+        if player.is_out:
+            screen.blit(bg_image, (0, 0))
+            screen.blit(lose_label, (SCREEN_WIDTH // 2 - 160, SCREEN_HEIGHT // 2 - 210))
+
+            # расположение очков после смерти
+            score_rect.midbottom = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 70)
+            # поверхность с перезапуском
+            screen.blit(restart, restart_rect)
+            screen.blit(records, records_rect)
+            screen.blit(save, save_rect)
+
+            mouse = pygame.mouse.get_pos()
+            # перезапуск основной функции
+            if restart_rect.collidepoint(mouse) and pygame.mouse.get_pressed()[0]:
+                start_the_game()
+
+            # if save_rect.collidepoint(mouse) and pygame.mouse.get_pressed()[0]:
+            #     gamer()
+
+            # топ рекордов
+            if records_rect.collidepoint(mouse) and pygame.mouse.get_pressed()[0]:
+                screen.blit(bg_image, (0, 0))
+                # screen.blit(top_five, (50, 50))
+                show_records()
+
+        # если еще живы
+        else:
+            now = pygame.time.get_ticks()  # текущее игровое время
+            elapsed = now - last_spawn_time  # время с момента последнего создания монстра
+            if elapsed > spawn_delay:  # проверяем вышла ли задержка и можно ли создавать монстра
+                last_spawn_time = pygame.time.get_ticks()  # зафиксировали последнее время создания монстра
+                haunters.append(Haunter())  # добавляем нового монстра в список монстров на экране
+
+            player.update()  # обновляем игрока для отображения
+            player.draw(screen)
+
+            for h in list(haunters):  # перебираем всех монстров из копии списка монстров
+                if h.is_out:
+                    haunters.remove(h)  # удаляем монстра если он за пределами экрана
+                else:
+                    h.update()  # обновляем если он живой
+                    h.draw(screen)
+
+                if not player.is_dead and not h.is_dead and player.rect.colliderect(h.rect):  # живы и соприкасаются
+                    if player.rect.bottom - player.change_y < h.rect.top:  # если игрок упал сверху
+                        h.kill(enemy_dead_image)
+                        player.jump()
+                        SCORE += 1
+                        spawn_delay = INIT_DELAY / (DECREASE_BASE ** SCORE)
+                    else:
+                        player.kill(player_image)
+
+            score_rect.midtop = (SCREEN_WIDTH // 2, 5)  # расположение очков во время игры
+
+        screen.blit(score_surface, score_rect)
+        pygame.display.update()
+
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_p]:
+            paused_menu()
+
+        clock.tick(FPS)  # ограничение по кадрам в секунду
+
+
+def start_menu():
+    menu = pygame_menu.Menu('Slowking', 400, 300,
+                            theme=pygame_menu.themes.THEME_BLUE)
+
+    menu.add.button('Новая игра', start_the_game)
+    menu.add.button('Выход', pygame_menu.events.EXIT)
+
+    while True:
+        screen.blit(bg_image, (0, 0))
+
+        events = pygame.event.get()
+        for event in events:
+            if event.type == pygame.QUIT:
+                exit()
+
+        if menu.is_enabled():
+            menu.update(events)
+            menu.draw(screen)
+
+        pygame.display.update()
+
+
+def paused_menu():
+    menu = pygame_menu.Menu('Slowking', 400, 300,
+                            theme=pygame_menu.themes.THEME_BLUE)
+
+    menu.add.button('Начать с начала', start_the_game)
+    menu.add.button('В меню', start_menu)
+
+    while True:
+        screen.blit(bg_image, (0, 0))
+
+        events = pygame.event.get()
+
+        if menu.is_enabled():
+            menu.update(events)
+            menu.draw(screen)
+
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_p]:
+            break
+
+        pygame.display.update()
+
+
+def show_records():
+    font_gamer = pygame.font.Font('fonts/Ubuntu-Light.ttf', 24)
+    screen.blit(bg_image, (0, 0))
+    result = get_best()
+    for index, gamer in enumerate(result):
+        name, score = gamer
+        s = f"{index + 1}. {name} - {score}"
+        text_gamer = font_gamer.render(s, True, 'black')
+        screen.blit(text_gamer, (320, 250 + 35 * index))
+
+
+# def gamer():
+#     font_gamer = pygame.font.Font('fonts/Ubuntu-Light.ttf', 24)
+#     name = 'Введите имя'
+#     is_find_name = False
+#     while not is_find_name:
+#         for event in pygame.event.get():
+#             if event.type == pygame.QUIT:
+#                 quit()
 #
+#             elif event.type == pygame.KEYDOWN:
+#                 if event.unicode.isalpha():
+#                     if name == 'Введите имя':
+#                         name = event.unicode
+#                     else:
+#                         name += event.unicode
+#                 elif event.key == pygame.K_BACKSPACE:
+#                     name = name[:-1]
+#                 elif event.key == pygame.K_RETURN:
+#                     if len(name) > 2:
+#                         global USERNAME
+#                         USERNAME = name
+#                         is_find_name = True
+#                         break
+#
+#         screen.fill('black')
+#         text_name = font_gamer(name, True, 'black')
+#         rect_name = text_name.get_rect()
+#         rect_name.center = screen.get_rect().center
+#         screen.blit(text_name, rect_name)
+
+# def save_results():
+#     font_gamer = pygame.font.Font('fonts/Ubuntu-Light.ttf', 24)
+#     name = 'Введите имя'
+#     is_find_name = False
+#     while not is_find_name:
+#         for event in pygame.event.get():
+#             if event.type == pygame.QUIT:
+#                 quit()
+#
+#             elif event.type == pygame.KEYDOWN:
+#                 if event.unicode.isalpha():
+#                     if name == 'Введите имя':
+#                         name = event.unicode
+#                     else:
+#                         name += event.unicode
+#                 elif event.key == pygame.K_BACKSPACE:
+#                     name = name[:-1]
+#                 elif event.key == pygame.K_RETURN:
+#                     if len(name) > 2:
+#                         global USERNAME
+#                         USERNAME = name
+#                         is_find_name = True
+#                         break
+#
+#         screen.fill('black')
+#         text_name = font_gamer(name, True, 'black')
+#         rect_name = text_name.get_rect()
+#         rect_name.center = screen.get_rect().center
+#         screen.blit(text_name, rect_name)
+
+start_menu()
